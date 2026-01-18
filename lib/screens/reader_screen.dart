@@ -18,6 +18,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   int _currentIndex = 0;
   bool _isPlaying = false;
   double _wpm = 300;
+  double _fontSize = 40.0;
   Timer? _timer;
   bool _isLoading = false;
   String _currentFileName = "No File Selected";
@@ -110,54 +111,85 @@ class _ReaderScreenState extends State<ReaderScreen> {
         onPressed: _pickAndLoadFile,
         child: const Icon(Icons.folder_open),
       ),
-      body: Column(
-        children: [
-          // DISPLAY AREA
-          Expanded(
-            flex: 3,
-            child: _isLoading
+      body: SafeArea(
+        child: OrientationBuilder(
+          builder: (context, orientation) {
+            final isPortrait = orientation == Orientation.portrait;
+
+            // 1. UPDATE: Pass _fontSize to the widget
+            final displayWidget = _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _words.isEmpty
                 ? const Center(child: Text("Open a file to start reading"))
                 : _currentIndex < _words.length
-                ? RsvpDisplay(word: _words[_currentIndex])
-                : const Center(child: Text("Done!")),
-          ),
+                ? RsvpDisplay(
+                    word: _words[_currentIndex],
+                    fontSize: _fontSize, // <-- PASS IT HERE
+                  )
+                : const Center(child: Text("Done!"));
 
-          // CONTROLS AREA
-          if (!_isLoading && _words.isNotEmpty)
-            Expanded(
-              flex: 1,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    "${_wpm.round()} WPM",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Slider(
-                    min: 100,
-                    max: 1000,
-                    divisions: 18, // Steps of 50
-                    value: _wpm,
-                    onChanged: (v) => setState(() => _wpm = v),
-                  ),
-                  const SizedBox(height: 10),
-                  ElevatedButton.icon(
-                    onPressed: _isPlaying ? _stopReading : _startReading,
-                    icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-                    label: Text(_isPlaying ? "PAUSE" : "READ"),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 40,
-                        vertical: 15,
+            // 2. UPDATE: Add Font Slider to Controls
+            final controlsWidget = _words.isEmpty || _isLoading
+                ? const SizedBox.shrink()
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // SPEED CONTROL
+                      Text(
+                        "Speed: ${_wpm.round()} WPM",
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                    ),
-                  ),
+                      Slider(
+                        min: 100,
+                        max: 1000,
+                        divisions: 18,
+                        value: _wpm,
+                        onChanged: (v) => setState(() => _wpm = v),
+                      ),
+
+                      // FONT SIZE CONTROL (NEW)
+                      Text(
+                        "Size: ${_fontSize.round()} px",
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Slider(
+                        min: 20,
+                        max: 100,
+                        divisions: 16,
+                        value: _fontSize,
+                        onChanged: (v) => setState(() => _fontSize = v),
+                      ),
+
+                      const SizedBox(height: 10),
+                      ElevatedButton.icon(
+                        onPressed: _isPlaying ? _stopReading : _startReading,
+                        icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                        label: Text(_isPlaying ? "PAUSE" : "READ"),
+                      ),
+                    ],
+                  ); // 3. The Adaptive Switch
+            if (isPortrait) {
+              // PORTRAIT: Vertical Column
+              return Column(
+                children: [
+                  Expanded(flex: 3, child: displayWidget),
+                  Expanded(flex: 1, child: controlsWidget),
                 ],
-              ),
-            ),
-        ],
+              );
+            } else {
+              // LANDSCAPE: Horizontal Row
+              // This gives the controls full height (no overflow) but restricts width
+              return Row(
+                children: [
+                  Expanded(flex: 3, child: displayWidget),
+                  // Add a vertical divider for visual separation
+                  VerticalDivider(width: 1, color: Colors.grey.shade800),
+                  Expanded(flex: 1, child: controlsWidget),
+                ],
+              );
+            }
+          },
+        ),
       ),
     );
   }
