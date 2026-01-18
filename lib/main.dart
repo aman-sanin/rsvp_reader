@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
       // 2. Define what "Dark" looks like
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF121212), // Deep dark grey
+        scaffoldBackgroundColor: const Color(0xFF000000), // Deep dark grey
         primaryColor: Colors.redAccent,
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF1E1E1E),

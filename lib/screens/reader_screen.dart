@@ -1,6 +1,5 @@
 // lib/screens/reader_screen.dart
 import 'dart:async';
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:rsvp_reader/src/rust/api/processor.dart';
@@ -21,6 +20,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   double _fontSize = 40.0;
   Timer? _timer;
   bool _isLoading = false;
+  bool _showSettings = false; // Default to hidden/collapsed
   String _currentFileName = "No File Selected";
 
   @override
@@ -103,14 +103,64 @@ class _ReaderScreenState extends State<ReaderScreen> {
     });
   }
 
+  void _rewind() {
+    setState(() {
+      // Go back 10 words, but don't go below 0
+      _currentIndex = (_currentIndex - 10).clamp(0, _words.length - 1);
+    });
+  }
+
+  void _fastForward() {
+    setState(() {
+      // Go forward 10 words, but don't go past the end
+      _currentIndex = (_currentIndex + 10).clamp(0, _words.length - 1);
+    });
+  }
+
+  void _goHome() {
+    _stopReading(); // Stop the timer
+    setState(() {
+      _words = []; // Clear the data
+      _currentIndex = 0;
+      _currentFileName = "RSVP Reader"; // Reset title
+      _isLoading = false;
+      _showSettings = false; // Collapse settings if open
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Boolean to check if we are in "Reading Mode"
+    final bool isReading = _words.isNotEmpty;
+
     return Scaffold(
-      appBar: AppBar(title: Text(_currentFileName), centerTitle: true),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _pickAndLoadFile,
-        child: const Icon(Icons.folder_open),
+      appBar: AppBar(
+        centerTitle: true,
+        // DYNAMIC TITLE: Shows filename if reading, else App Name
+        title: Text(
+          isReading ? _currentFileName : "RSVP Reader",
+          style: const TextStyle(fontSize: 16),
+        ),
+
+        // BACK BUTTON LOGIC
+        automaticallyImplyLeading: false, // Don't show default back button
+        leading: isReading
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: "Close File",
+                onPressed: _goHome, // Calls the reset function
+              )
+            : null, // Hide if on Home screen
       ),
+
+      // FAB LOGIC: Only show "Open File" when on Home screen
+      floatingActionButton: isReading
+          ? null // Hide FAB while reading
+          : FloatingActionButton.extended(
+              onPressed: _pickAndLoadFile,
+              icon: const Icon(Icons.folder_open),
+              label: const Text("Open File"),
+            ),
       body: SafeArea(
         child: OrientationBuilder(
           builder: (context, orientation) {
@@ -131,43 +181,146 @@ class _ReaderScreenState extends State<ReaderScreen> {
             // 2. UPDATE: Add Font Slider to Controls
             final controlsWidget = _words.isEmpty || _isLoading
                 ? const SizedBox.shrink()
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // SPEED CONTROL
-                      Text(
-                        "Speed: ${_wpm.round()} WPM",
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      Slider(
-                        min: 100,
-                        max: 1000,
-                        divisions: 18,
-                        value: _wpm,
-                        onChanged: (v) => setState(() => _wpm = v),
-                      ),
+                : Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // 1. COLLAPSIBLE SETTINGS PANEL
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            child: _showSettings
+                                ? Column(
+                                    children: [
+                                      // SPEED SLIDER
+                                      Text(
+                                        "Speed: ${_wpm.round()} WPM",
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Slider(
+                                        min: 100,
+                                        max: 1000,
+                                        divisions: 18,
+                                        value: _wpm,
+                                        onChanged: (v) =>
+                                            setState(() => _wpm = v),
+                                      ),
+                                      // FONT SLIDER
+                                      Text(
+                                        "Size: ${_fontSize.round()} px",
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Slider(
+                                        min: 20,
+                                        max: 100,
+                                        divisions: 16,
+                                        value: _fontSize,
+                                        onChanged: (v) =>
+                                            setState(() => _fontSize = v),
+                                      ),
+                                      const Divider(), // Visual separator
+                                    ],
+                                  )
+                                : const SizedBox.shrink(), // Hides completely when false
+                          ),
 
-                      // FONT SIZE CONTROL (NEW)
-                      Text(
-                        "Size: ${_fontSize.round()} px",
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      Slider(
-                        min: 20,
-                        max: 100,
-                        divisions: 16,
-                        value: _fontSize,
-                        onChanged: (v) => setState(() => _fontSize = v),
-                      ),
+                          // 2. MINIMAL INFO (Visible when settings are collapsed)
+                          if (!_showSettings)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Text(
+                                "${_wpm.round()} WPM  •  ${_fontSize.round()} px",
+                                style: TextStyle(
+                                  color: Colors.grey.shade500,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
 
-                      const SizedBox(height: 10),
-                      ElevatedButton.icon(
-                        onPressed: _isPlaying ? _stopReading : _startReading,
-                        icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-                        label: Text(_isPlaying ? "PAUSE" : "READ"),
+                          // 3. PLAYBACK CONTROLS (ADAPTIVE)
+                          Flex(
+                            direction: isPortrait
+                                ? Axis.horizontal
+                                : Axis.vertical,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // REWIND
+                              IconButton.filledTonal(
+                                onPressed: _rewind,
+                                icon: const Icon(Icons.replay_10),
+                                tooltip: "Back 10 words",
+                              ),
+
+                              // Adaptive Spacer (Width in Portrait, Height in Landscape)
+                              SizedBox(
+                                width: isPortrait ? 15 : 0,
+                                height: isPortrait ? 0 : 15,
+                              ),
+
+                              // PLAY / PAUSE
+                              ElevatedButton.icon(
+                                onPressed: _isPlaying
+                                    ? _stopReading
+                                    : _startReading,
+                                icon: Icon(
+                                  _isPlaying ? Icons.pause : Icons.play_arrow,
+                                ),
+                                label: Text(_isPlaying ? "PAUSE" : "READ"),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 25,
+                                    vertical: 15,
+                                  ),
+                                ),
+                              ),
+
+                              SizedBox(
+                                width: isPortrait ? 15 : 0,
+                                height: isPortrait ? 0 : 15,
+                              ),
+
+                              // FAST FORWARD
+                              IconButton.filledTonal(
+                                onPressed: _fastForward,
+                                icon: const Icon(Icons.forward_10),
+                                tooltip: "Forward 10 words",
+                              ),
+
+                              SizedBox(
+                                width: isPortrait ? 15 : 0,
+                                height: isPortrait ? 0 : 15,
+                              ),
+
+                              // SETTINGS TOGGLE
+                              IconButton(
+                                onPressed: () => setState(
+                                  () => _showSettings = !_showSettings,
+                                ),
+                                icon: Icon(
+                                  _showSettings
+                                      ? Icons.expand_less
+                                      : Icons.tune,
+                                ),
+                                tooltip: "Toggle Settings",
+                                style: _showSettings
+                                    ? IconButton.styleFrom(
+                                        backgroundColor: Colors.white10,
+                                      )
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ],
-                  ); // 3. The Adaptive Switch
+                    ),
+                  );
+            // 3. The Adaptive Switch
             if (isPortrait) {
               // PORTRAIT: Vertical Column
               return Column(

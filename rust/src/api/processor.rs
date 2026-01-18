@@ -66,17 +66,29 @@ fn read_epub_file(path: &Path) -> Result<String> {
 
 // 3. THE SEGMENTATION LOGIC
 pub fn parse_text_to_rsvp(text: String) -> Vec<RsvpWord> {
-    text.split_whitespace()
+    // 1. DE-HYPHENATION (The Fix)
+    // We look for a hyphen followed by a newline (Unix or Windows style)
+    // and replace it with an empty string to merge the parts.
+    let text_merged = text
+        .replace("-\r\n", "") // Windows line break
+        .replace("-\n", ""); // Unix/Linux line break
+
+    // 2. STANDARD CLEANUP
+    // Now we treat remaining hyphens as "hard" hyphens (like "long-term")
+    // and ensure they split into two frames.
+    let clean_text = text_merged.replace("-", "- ").replace("—", " — ");
+
+    clean_text
+        .split_whitespace()
         .map(|word| {
             let len = word.chars().count();
 
-            // Calculate "Red Letter" Index (approx 30-35% into word)
+            // --- PIVOT LOGIC (Same as before) ---
             let pivot_idx = if len == 1 {
                 0
             } else {
                 (len as f32 * 0.35).floor() as usize
             };
-            // Ensure we don't go out of bounds
             let pivot_idx = pivot_idx.min(len.saturating_sub(1));
 
             let chars: Vec<char> = word.chars().collect();
@@ -84,11 +96,17 @@ pub fn parse_text_to_rsvp(text: String) -> Vec<RsvpWord> {
             let center: String = chars[pivot_idx].to_string();
             let right: String = chars[pivot_idx + 1..].iter().collect();
 
-            // Calculate Delay
+            // --- DELAY LOGIC (Same as before) ---
             let mut delay = 1.0;
+
             if word.ends_with('.') || word.ends_with('!') || word.ends_with('?') {
                 delay = 2.0;
-            } else if word.ends_with(',') || word.ends_with(':') {
+            } else if word.ends_with(',')
+                || word.ends_with(':')
+                || word.ends_with(';')
+                || word.ends_with('-')
+                || word == "—"
+            {
                 delay = 1.5;
             } else if len > 10 {
                 delay = 1.3;
