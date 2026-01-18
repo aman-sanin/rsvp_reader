@@ -1,5 +1,7 @@
 // lib/screens/reader_screen.dart
 import 'dart:async';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:rsvp_reader/src/rust/api/processor.dart';
 import 'package:rsvp_reader/widgets/rsvp_display.dart';
@@ -12,30 +14,62 @@ class ReaderScreen extends StatefulWidget {
 }
 
 class _ReaderScreenState extends State<ReaderScreen> {
-  // State
   List<RsvpWord> _words = [];
   int _currentIndex = 0;
   bool _isPlaying = false;
   double _wpm = 300;
-
   Timer? _timer;
+  bool _isLoading = false;
+  String _currentFileName = "No File Selected";
 
   @override
-  void initState() {
-    super.initState();
-    _loadDemoText(); // Load data on start
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
-  Future<void> _loadDemoText() async {
-    // For Phase 1, we simulate a file read with a hardcoded string
-    // In Phase 2, we will use a FilePicker here.
-    const demo =
-        "Welcome to your new Rust powered speed reader. "
-        "This text is being processed by Rust code, segmented, and "
-        "sent back to Flutter for rendering. Punctuation pauses automatically.";
+  Future<void> _pickAndLoadFile() async {
+    try {
+      // 1. Pick the file
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['txt', 'pdf', 'epub'],
+      );
 
-    final processed = await parseTextToRsvp(text: demo);
-    setState(() => _words = processed);
+      if (result != null && result.files.single.path != null) {
+        setState(() {
+          _isLoading = true;
+          _isPlaying = false;
+          _timer?.cancel();
+        });
+
+        final path = result.files.single.path!;
+        final fileName = result.files.single.name;
+
+        // 2. RUST CALL: Read file bytes -> String
+        // This runs on a background thread in Rust!
+        final rawText = await readFileContent(path: path);
+
+        // 3. RUST CALL: Process String -> RSVP Words
+        final processedWords = await parseTextToRsvp(text: rawText);
+
+        if (mounted) {
+          setState(() {
+            _words = processedWords;
+            _currentIndex = 0;
+            _currentFileName = fileName;
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   void _startReading() {
@@ -55,55 +89,74 @@ class _ReaderScreenState extends State<ReaderScreen> {
       return;
     }
 
-    // 1. Calculate duration based on current word's delay factor
-    // Base MS per word = 60,000 / WPM
     final baseMs = 60000 / _wpm;
     final durationMs = baseMs * _words[_currentIndex].delayFactor;
 
-    // 2. Schedule the update
     _timer = Timer(Duration(milliseconds: durationMs.toInt()), () {
-      setState(() {
-        _currentIndex++;
-      });
-      _scheduleNextWord(); // Recursive loop
+      if (mounted) {
+        setState(() {
+          _currentIndex++;
+        });
+        _scheduleNextWord();
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("RSVP Reader")),
+      appBar: AppBar(title: Text(_currentFileName), centerTitle: true),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _pickAndLoadFile,
+        child: const Icon(Icons.folder_open),
+      ),
       body: Column(
         children: [
-          // THE DISPLAY AREA
+          // DISPLAY AREA
           Expanded(
             flex: 3,
-            child: _words.isEmpty
+            child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
+                : _words.isEmpty
+                ? const Center(child: Text("Open a file to start reading"))
                 : _currentIndex < _words.length
                 ? RsvpDisplay(word: _words[_currentIndex])
                 : const Center(child: Text("Done!")),
           ),
 
-          // THE CONTROLS
-          Expanded(
-            flex: 1,
-            child: Column(
-              children: [
-                Text("${_wpm.round()} WPM"),
-                Slider(
-                  min: 100,
-                  max: 1000,
-                  value: _wpm,
-                  onChanged: (v) => setState(() => _wpm = v),
-                ),
-                ElevatedButton(
-                  onPressed: _isPlaying ? _stopReading : _startReading,
-                  child: Text(_isPlaying ? "PAUSE" : "READ"),
-                ),
-              ],
+          // CONTROLS AREA
+          if (!_isLoading && _words.isNotEmpty)
+            Expanded(
+              flex: 1,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    "${_wpm.round()} WPM",
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Slider(
+                    min: 100,
+                    max: 1000,
+                    divisions: 18, // Steps of 50
+                    value: _wpm,
+                    onChanged: (v) => setState(() => _wpm = v),
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton.icon(
+                    onPressed: _isPlaying ? _stopReading : _startReading,
+                    icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                    label: Text(_isPlaying ? "PAUSE" : "READ"),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 15,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );

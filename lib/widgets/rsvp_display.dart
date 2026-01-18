@@ -14,7 +14,10 @@ class RsvpDisplay extends StatelessWidget {
     final style = GoogleFonts.robotoMono(
       fontSize: 40,
       fontWeight: FontWeight.bold,
-      color: Colors.black,
+      // Change hardcoded black to dynamic color
+      color: Theme.of(context).brightness == Brightness.dark
+          ? Colors.white
+          : Colors.black,
     );
     final pivotStyle = style.copyWith(color: Colors.red);
 
