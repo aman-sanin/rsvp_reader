@@ -1,7 +1,7 @@
 // lib/widgets/rsvp_display.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:rsvp_reader/src/rust/api/processor.dart';
+import 'package:verse/src/rust/api/processor.dart';
 
 class RsvpDisplay extends StatelessWidget {
   final RsvpWord word;

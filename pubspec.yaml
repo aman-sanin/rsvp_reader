@@ -1,4 +1,4 @@
-name: rsvp_reader
+name: verse
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -102,5 +102,6 @@ flutter:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
+  linux: "app_icon"
   image_path: "assets/icon.png"
   min_sdk_android: 21

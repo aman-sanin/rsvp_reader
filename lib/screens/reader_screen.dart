@@ -2,8 +2,8 @@
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:rsvp_reader/src/rust/api/processor.dart';
-import 'package:rsvp_reader/widgets/rsvp_display.dart';
+import 'package:verse/src/rust/api/processor.dart';
+import 'package:verse/widgets/rsvp_display.dart';
 
 class ReaderScreen extends StatefulWidget {
   const ReaderScreen({super.key});
