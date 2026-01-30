@@ -1,4 +1,4 @@
-package com.example.rsvp_reader
+package com.example.verse
 
 import io.flutter.embedding.android.FlutterActivity
 

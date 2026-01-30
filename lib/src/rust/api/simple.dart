@@ -5,6 +5,21 @@
 
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+part 'simple.freezed.dart';
 
-String greet({required String name}) =>
-    RustLib.instance.api.crateApiSimpleGreet(name: name);
+// These functions are ignored because they are not marked as `pub`: `generate_frame`, `process_text_content`, `read_epub`, `read_plain_text`
+
+Future<List<RsvpFrame>> loadBook({
+  required String path,
+  required int baseWpm,
+}) => RustLib.instance.api.crateApiSimpleLoadBook(path: path, baseWpm: baseWpm);
+
+@freezed
+sealed class RsvpFrame with _$RsvpFrame {
+  const factory RsvpFrame({
+    required String text,
+    required int orpIndex,
+    required int delayMs,
+  }) = _RsvpFrame;
+}
