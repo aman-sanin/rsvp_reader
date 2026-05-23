@@ -6,11 +6,15 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
-import 'api/processor.dart';
+import 'api/library.dart';
+import 'api/reader.dart';
+import 'core/pacing.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_web.dart';
+import 'storage/library_scanner.dart';
+import 'storage/progress_store.dart';
 
 abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustLibApiImplPlatform({
@@ -20,23 +24,84 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     required super.portManager,
   });
 
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_ReaderHandlePtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle;
+
   @protected
-  AnyhowException dco_decode_AnyhowException(dynamic raw);
+  ReaderHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    dynamic raw,
+  );
+
+  @protected
+  ReaderHandle
+  dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    dynamic raw,
+  );
+
+  @protected
+  ReaderHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    dynamic raw,
+  );
 
   @protected
   String dco_decode_String(dynamic raw);
 
   @protected
-  double dco_decode_f_32(dynamic raw);
+  BookInfo dco_decode_book_info(dynamic raw);
+
+  @protected
+  bool dco_decode_bool(dynamic raw);
+
+  @protected
+  PacingConfig dco_decode_box_autoadd_pacing_config(dynamic raw);
+
+  @protected
+  ProgressEntry dco_decode_box_autoadd_progress_entry(dynamic raw);
+
+  @protected
+  ReaderCommand dco_decode_box_autoadd_reader_command(dynamic raw);
+
+  @protected
+  int dco_decode_box_autoadd_u_8(dynamic raw);
+
+  @protected
+  int dco_decode_i_32(dynamic raw);
+
+  @protected
+  List<BookInfo> dco_decode_list_book_info(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
-  List<RsvpWord> dco_decode_list_rsvp_word(dynamic raw);
+  String? dco_decode_opt_String(dynamic raw);
 
   @protected
-  RsvpWord dco_decode_rsvp_word(dynamic raw);
+  ProgressEntry? dco_decode_opt_box_autoadd_progress_entry(dynamic raw);
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_8(dynamic raw);
+
+  @protected
+  PacingConfig dco_decode_pacing_config(dynamic raw);
+
+  @protected
+  ProgressEntry dco_decode_progress_entry(dynamic raw);
+
+  @protected
+  ReaderCommand dco_decode_reader_command(dynamic raw);
+
+  @protected
+  ReaderState dco_decode_reader_state(dynamic raw);
+
+  @protected
+  int dco_decode_u_16(dynamic raw);
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -45,22 +110,90 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
-  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+  BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  ReaderHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ReaderHandle
+  sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ReaderHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    SseDeserializer deserializer,
+  );
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
-  double sse_decode_f_32(SseDeserializer deserializer);
+  BookInfo sse_decode_book_info(SseDeserializer deserializer);
+
+  @protected
+  bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  PacingConfig sse_decode_box_autoadd_pacing_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProgressEntry sse_decode_box_autoadd_progress_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ReaderCommand sse_decode_box_autoadd_reader_command(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  int sse_decode_box_autoadd_u_8(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  List<BookInfo> sse_decode_list_book_info(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
-  List<RsvpWord> sse_decode_list_rsvp_word(SseDeserializer deserializer);
+  String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
-  RsvpWord sse_decode_rsvp_word(SseDeserializer deserializer);
+  ProgressEntry? sse_decode_opt_box_autoadd_progress_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_8(SseDeserializer deserializer);
+
+  @protected
+  PacingConfig sse_decode_pacing_config(SseDeserializer deserializer);
+
+  @protected
+  ProgressEntry sse_decode_progress_entry(SseDeserializer deserializer);
+
+  @protected
+  ReaderCommand sse_decode_reader_command(SseDeserializer deserializer);
+
+  @protected
+  ReaderState sse_decode_reader_state(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -69,14 +202,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
+  BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer);
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    ReaderHandle self,
+    SseSerializer serializer,
+  );
 
   @protected
-  void sse_encode_AnyhowException(
-    AnyhowException self,
+  void
+  sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    ReaderHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    ReaderHandle self,
     SseSerializer serializer,
   );
 
@@ -84,7 +229,37 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
-  void sse_encode_f_32(double self, SseSerializer serializer);
+  void sse_encode_book_info(BookInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_pacing_config(
+    PacingConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_progress_entry(
+    ProgressEntry self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_reader_command(
+    ReaderCommand self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_u_8(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_book_info(List<BookInfo> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
@@ -93,10 +268,34 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_rsvp_word(List<RsvpWord> self, SseSerializer serializer);
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_rsvp_word(RsvpWord self, SseSerializer serializer);
+  void sse_encode_opt_box_autoadd_progress_entry(
+    ProgressEntry? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_8(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pacing_config(PacingConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_progress_entry(ProgressEntry self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_reader_command(ReaderCommand self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_reader_state(ReaderState self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);
@@ -105,16 +304,29 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer);
+  void sse_encode_usize(BigInt self, SseSerializer serializer);
 }
 
 // Section: wire_class
 
 class RustLibWire implements BaseWire {
   RustLibWire.fromExternalLibrary(ExternalLibrary lib);
+
+  void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+        ptr,
+      );
+
+  void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    int ptr,
+  ) => wasmModule
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+        ptr,
+      );
 }
 
 @JS('wasm_bindgen')
@@ -122,4 +334,14 @@ external RustLibWasmModule get wasmModule;
 
 @JS()
 @anonymous
-extension type RustLibWasmModule._(JSObject _) implements JSObject {}
+extension type RustLibWasmModule._(JSObject _) implements JSObject {
+  external void
+  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    int ptr,
+  );
+
+  external void
+  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    int ptr,
+  );
+}

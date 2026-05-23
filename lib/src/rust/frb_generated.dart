@@ -3,13 +3,17 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
-import 'api/processor.dart';
+import 'api/library.dart';
+import 'api/reader.dart';
+import 'core/pacing.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
 import 'frb_generated.io.dart'
     if (dart.library.js_interop) 'frb_generated.web.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'storage/library_scanner.dart';
+import 'storage/progress_store.dart';
 
 /// Main entrypoint of the Rust API
 class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
@@ -64,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -2007272842;
+  int get rustContentHash => -139379983;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -75,11 +79,57 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  Future<List<RsvpWord>> crateApiProcessorParseTextToRsvp({
-    required String text,
+  Future<String> crateApiLibraryConvertEpub({
+    required String epubPath,
+    required BigInt maxWords,
   });
 
-  Future<String> crateApiProcessorReadFileContent({required String path});
+  Future<ReaderHandle> crateApiReaderCreateReader({String? bookPath});
+
+  Future<void> crateApiLibraryDeleteBook({required String bookPath});
+
+  Future<List<BookInfo>> crateApiLibraryGetLibrary({required String rootDir});
+
+  Future<ProgressEntry?> crateApiLibraryGetProgress({required String bookPath});
+
+  Future<void> crateApiLibraryInitLibrary({
+    required String cacheFile,
+    required String progressFile,
+  });
+
+  Future<void> crateApiReaderReaderCommand({
+    required ReaderHandle handle,
+    required ReaderCommand cmd,
+    required BigInt nowMs,
+  });
+
+  Future<ReaderState> crateApiReaderReaderState({required ReaderHandle handle});
+
+  Future<bool> crateApiReaderReaderUpdate({
+    required ReaderHandle handle,
+    required BigInt nowMs,
+  });
+
+  Future<void> crateApiLibraryRefreshCache({required String rootDir});
+
+  Future<void> crateApiLibrarySaveProgress({
+    required String bookPath,
+    required BigInt wordIndex,
+    required BigInt wordCount,
+  });
+
+  Future<void> crateApiReaderSetPacingConfig({
+    required ReaderHandle handle,
+    required PacingConfig config,
+  });
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_ReaderHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_ReaderHandle;
+
+  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_ReaderHandlePtr;
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -91,14 +141,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
-  Future<List<RsvpWord>> crateApiProcessorParseTextToRsvp({
-    required String text,
+  Future<String> crateApiLibraryConvertEpub({
+    required String epubPath,
+    required BigInt maxWords,
   }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(text, serializer);
+          sse_encode_String(epubPath, serializer);
+          sse_encode_usize(maxWords, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -107,26 +159,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_rsvp_word,
-          decodeErrorData: null,
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
         ),
-        constMeta: kCrateApiProcessorParseTextToRsvpConstMeta,
-        argValues: [text],
+        constMeta: kCrateApiLibraryConvertEpubConstMeta,
+        argValues: [epubPath, maxWords],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiProcessorParseTextToRsvpConstMeta =>
-      const TaskConstMeta(debugName: "parse_text_to_rsvp", argNames: ["text"]);
+  TaskConstMeta get kCrateApiLibraryConvertEpubConstMeta => const TaskConstMeta(
+    debugName: "convert_epub",
+    argNames: ["epubPath", "maxWords"],
+  );
 
   @override
-  Future<String> crateApiProcessorReadFileContent({required String path}) {
+  Future<ReaderHandle> crateApiReaderCreateReader({String? bookPath}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(path, serializer);
+          sse_encode_opt_String(bookPath, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -135,23 +189,386 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_AnyhowException,
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle,
+          decodeErrorData: null,
         ),
-        constMeta: kCrateApiProcessorReadFileContentConstMeta,
-        argValues: [path],
+        constMeta: kCrateApiReaderCreateReaderConstMeta,
+        argValues: [bookPath],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiProcessorReadFileContentConstMeta =>
-      const TaskConstMeta(debugName: "read_file_content", argNames: ["path"]);
+  TaskConstMeta get kCrateApiReaderCreateReaderConstMeta =>
+      const TaskConstMeta(debugName: "create_reader", argNames: ["bookPath"]);
+
+  @override
+  Future<void> crateApiLibraryDeleteBook({required String bookPath}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(bookPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiLibraryDeleteBookConstMeta,
+        argValues: [bookPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLibraryDeleteBookConstMeta =>
+      const TaskConstMeta(debugName: "delete_book", argNames: ["bookPath"]);
+
+  @override
+  Future<List<BookInfo>> crateApiLibraryGetLibrary({required String rootDir}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(rootDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_book_info,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLibraryGetLibraryConstMeta,
+        argValues: [rootDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLibraryGetLibraryConstMeta =>
+      const TaskConstMeta(debugName: "get_library", argNames: ["rootDir"]);
+
+  @override
+  Future<ProgressEntry?> crateApiLibraryGetProgress({
+    required String bookPath,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(bookPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_progress_entry,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLibraryGetProgressConstMeta,
+        argValues: [bookPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLibraryGetProgressConstMeta =>
+      const TaskConstMeta(debugName: "get_progress", argNames: ["bookPath"]);
+
+  @override
+  Future<void> crateApiLibraryInitLibrary({
+    required String cacheFile,
+    required String progressFile,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(cacheFile, serializer);
+          sse_encode_String(progressFile, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiLibraryInitLibraryConstMeta,
+        argValues: [cacheFile, progressFile],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLibraryInitLibraryConstMeta => const TaskConstMeta(
+    debugName: "init_library",
+    argNames: ["cacheFile", "progressFile"],
+  );
+
+  @override
+  Future<void> crateApiReaderReaderCommand({
+    required ReaderHandle handle,
+    required ReaderCommand cmd,
+    required BigInt nowMs,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+            handle,
+            serializer,
+          );
+          sse_encode_box_autoadd_reader_command(cmd, serializer);
+          sse_encode_u_64(nowMs, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiReaderReaderCommandConstMeta,
+        argValues: [handle, cmd, nowMs],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiReaderReaderCommandConstMeta =>
+      const TaskConstMeta(
+        debugName: "reader_command",
+        argNames: ["handle", "cmd", "nowMs"],
+      );
+
+  @override
+  Future<ReaderState> crateApiReaderReaderState({
+    required ReaderHandle handle,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+            handle,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_reader_state,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiReaderReaderStateConstMeta,
+        argValues: [handle],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiReaderReaderStateConstMeta =>
+      const TaskConstMeta(debugName: "reader_state", argNames: ["handle"]);
+
+  @override
+  Future<bool> crateApiReaderReaderUpdate({
+    required ReaderHandle handle,
+    required BigInt nowMs,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+            handle,
+            serializer,
+          );
+          sse_encode_u_64(nowMs, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiReaderReaderUpdateConstMeta,
+        argValues: [handle, nowMs],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiReaderReaderUpdateConstMeta => const TaskConstMeta(
+    debugName: "reader_update",
+    argNames: ["handle", "nowMs"],
+  );
+
+  @override
+  Future<void> crateApiLibraryRefreshCache({required String rootDir}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(rootDir, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiLibraryRefreshCacheConstMeta,
+        argValues: [rootDir],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLibraryRefreshCacheConstMeta =>
+      const TaskConstMeta(debugName: "refresh_cache", argNames: ["rootDir"]);
+
+  @override
+  Future<void> crateApiLibrarySaveProgress({
+    required String bookPath,
+    required BigInt wordIndex,
+    required BigInt wordCount,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(bookPath, serializer);
+          sse_encode_usize(wordIndex, serializer);
+          sse_encode_usize(wordCount, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiLibrarySaveProgressConstMeta,
+        argValues: [bookPath, wordIndex, wordCount],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLibrarySaveProgressConstMeta =>
+      const TaskConstMeta(
+        debugName: "save_progress",
+        argNames: ["bookPath", "wordIndex", "wordCount"],
+      );
+
+  @override
+  Future<void> crateApiReaderSetPacingConfig({
+    required ReaderHandle handle,
+    required PacingConfig config,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+            handle,
+            serializer,
+          );
+          sse_encode_box_autoadd_pacing_config(config, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiReaderSetPacingConfigConstMeta,
+        argValues: [handle, config],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiReaderSetPacingConfigConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_pacing_config",
+        argNames: ["handle", "config"],
+      );
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_ReaderHandle => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_ReaderHandle => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle;
 
   @protected
-  AnyhowException dco_decode_AnyhowException(dynamic raw) {
+  ReaderHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    dynamic raw,
+  ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return AnyhowException(raw as String);
+    return ReaderHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  ReaderHandle
+  dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ReaderHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  ReaderHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ReaderHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
   }
 
   @protected
@@ -161,9 +578,62 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  double dco_decode_f_32(dynamic raw) {
+  BookInfo dco_decode_book_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as double;
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return BookInfo(
+      path: dco_decode_String(arr[0]),
+      title: dco_decode_String(arr[1]),
+      author: dco_decode_String(arr[2]),
+      sizeBytes: dco_decode_u_64(arr[3]),
+      fileType: dco_decode_String(arr[4]),
+      category: dco_decode_String(arr[5]),
+      progressPercent: dco_decode_opt_box_autoadd_u_8(arr[6]),
+    );
+  }
+
+  @protected
+  bool dco_decode_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as bool;
+  }
+
+  @protected
+  PacingConfig dco_decode_box_autoadd_pacing_config(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_pacing_config(raw);
+  }
+
+  @protected
+  ProgressEntry dco_decode_box_autoadd_progress_entry(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_progress_entry(raw);
+  }
+
+  @protected
+  ReaderCommand dco_decode_box_autoadd_reader_command(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_reader_command(raw);
+  }
+
+  @protected
+  int dco_decode_box_autoadd_u_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  List<BookInfo> dco_decode_list_book_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_book_info).toList();
   }
 
   @protected
@@ -173,23 +643,102 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<RsvpWord> dco_decode_list_rsvp_word(dynamic raw) {
+  String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_rsvp_word).toList();
+    return raw == null ? null : dco_decode_String(raw);
   }
 
   @protected
-  RsvpWord dco_decode_rsvp_word(dynamic raw) {
+  ProgressEntry? dco_decode_opt_box_autoadd_progress_entry(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_progress_entry(raw);
+  }
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_8(raw);
+  }
+
+  @protected
+  PacingConfig dco_decode_pacing_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return RsvpWord(
-      left: dco_decode_String(arr[0]),
-      center: dco_decode_String(arr[1]),
-      right: dco_decode_String(arr[2]),
-      delayFactor: dco_decode_f_32(arr[3]),
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return PacingConfig(
+      longWordDelayMs: dco_decode_u_16(arr[0]),
+      complexWordDelayMs: dco_decode_u_16(arr[1]),
+      punctuationDelayMs: dco_decode_u_16(arr[2]),
+      longWordScalePercent: dco_decode_u_8(arr[3]),
+      complexWordScalePercent: dco_decode_u_8(arr[4]),
+      punctuationScalePercent: dco_decode_u_8(arr[5]),
     );
+  }
+
+  @protected
+  ProgressEntry dco_decode_progress_entry(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return ProgressEntry(
+      wordIndex: dco_decode_usize(arr[0]),
+      wordCount: dco_decode_usize(arr[1]),
+      updatedAt: dco_decode_u_64(arr[2]),
+    );
+  }
+
+  @protected
+  ReaderCommand dco_decode_reader_command(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return ReaderCommand_Play();
+      case 1:
+        return ReaderCommand_Pause();
+      case 2:
+        return ReaderCommand_SeekTo(dco_decode_usize(raw[1]));
+      case 3:
+        return ReaderCommand_Scrub(dco_decode_i_32(raw[1]));
+      case 4:
+        return ReaderCommand_RewindSentence();
+      case 5:
+        return ReaderCommand_AdjustWpm(dco_decode_i_32(raw[1]));
+      case 6:
+        return ReaderCommand_SetWpm(dco_decode_u_16(raw[1]));
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  ReaderState dco_decode_reader_state(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return ReaderState(
+      currentWord: dco_decode_String(arr[0]),
+      currentIndex: dco_decode_usize(arr[1]),
+      totalWords: dco_decode_usize(arr[2]),
+      wpm: dco_decode_u_16(arr[3]),
+      isPlaying: dco_decode_bool(arr[4]),
+      atEnd: dco_decode_bool(arr[5]),
+      progressPercent: dco_decode_u_8(arr[6]),
+    );
+  }
+
+  @protected
+  int dco_decode_u_16(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
   }
 
   @protected
@@ -205,10 +754,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
+  BigInt dco_decode_usize(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
+  }
+
+  @protected
+  ReaderHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    SseDeserializer deserializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_String(deserializer);
-    return AnyhowException(inner);
+    return ReaderHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  ReaderHandle
+  sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return ReaderHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  ReaderHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return ReaderHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
   }
 
   @protected
@@ -219,9 +803,78 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  double sse_decode_f_32(SseDeserializer deserializer) {
+  BookInfo sse_decode_book_info(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getFloat32();
+    var var_path = sse_decode_String(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_author = sse_decode_String(deserializer);
+    var var_sizeBytes = sse_decode_u_64(deserializer);
+    var var_fileType = sse_decode_String(deserializer);
+    var var_category = sse_decode_String(deserializer);
+    var var_progressPercent = sse_decode_opt_box_autoadd_u_8(deserializer);
+    return BookInfo(
+      path: var_path,
+      title: var_title,
+      author: var_author,
+      sizeBytes: var_sizeBytes,
+      fileType: var_fileType,
+      category: var_category,
+      progressPercent: var_progressPercent,
+    );
+  }
+
+  @protected
+  bool sse_decode_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  PacingConfig sse_decode_box_autoadd_pacing_config(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_pacing_config(deserializer));
+  }
+
+  @protected
+  ProgressEntry sse_decode_box_autoadd_progress_entry(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_progress_entry(deserializer));
+  }
+
+  @protected
+  ReaderCommand sse_decode_box_autoadd_reader_command(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_reader_command(deserializer));
+  }
+
+  @protected
+  int sse_decode_box_autoadd_u_8(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_8(deserializer));
+  }
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
+  }
+
+  @protected
+  List<BookInfo> sse_decode_list_book_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <BookInfo>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_book_info(deserializer));
+    }
+    return ans_;
   }
 
   @protected
@@ -232,30 +885,132 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<RsvpWord> sse_decode_list_rsvp_word(SseDeserializer deserializer) {
+  String? sse_decode_opt_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <RsvpWord>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_rsvp_word(deserializer));
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_String(deserializer));
+    } else {
+      return null;
     }
-    return ans_;
   }
 
   @protected
-  RsvpWord sse_decode_rsvp_word(SseDeserializer deserializer) {
+  ProgressEntry? sse_decode_opt_box_autoadd_progress_entry(
+    SseDeserializer deserializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_left = sse_decode_String(deserializer);
-    var var_center = sse_decode_String(deserializer);
-    var var_right = sse_decode_String(deserializer);
-    var var_delayFactor = sse_decode_f_32(deserializer);
-    return RsvpWord(
-      left: var_left,
-      center: var_center,
-      right: var_right,
-      delayFactor: var_delayFactor,
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_progress_entry(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_8(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_8(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  PacingConfig sse_decode_pacing_config(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_longWordDelayMs = sse_decode_u_16(deserializer);
+    var var_complexWordDelayMs = sse_decode_u_16(deserializer);
+    var var_punctuationDelayMs = sse_decode_u_16(deserializer);
+    var var_longWordScalePercent = sse_decode_u_8(deserializer);
+    var var_complexWordScalePercent = sse_decode_u_8(deserializer);
+    var var_punctuationScalePercent = sse_decode_u_8(deserializer);
+    return PacingConfig(
+      longWordDelayMs: var_longWordDelayMs,
+      complexWordDelayMs: var_complexWordDelayMs,
+      punctuationDelayMs: var_punctuationDelayMs,
+      longWordScalePercent: var_longWordScalePercent,
+      complexWordScalePercent: var_complexWordScalePercent,
+      punctuationScalePercent: var_punctuationScalePercent,
     );
+  }
+
+  @protected
+  ProgressEntry sse_decode_progress_entry(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_wordIndex = sse_decode_usize(deserializer);
+    var var_wordCount = sse_decode_usize(deserializer);
+    var var_updatedAt = sse_decode_u_64(deserializer);
+    return ProgressEntry(
+      wordIndex: var_wordIndex,
+      wordCount: var_wordCount,
+      updatedAt: var_updatedAt,
+    );
+  }
+
+  @protected
+  ReaderCommand sse_decode_reader_command(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        return ReaderCommand_Play();
+      case 1:
+        return ReaderCommand_Pause();
+      case 2:
+        var var_field0 = sse_decode_usize(deserializer);
+        return ReaderCommand_SeekTo(var_field0);
+      case 3:
+        var var_field0 = sse_decode_i_32(deserializer);
+        return ReaderCommand_Scrub(var_field0);
+      case 4:
+        return ReaderCommand_RewindSentence();
+      case 5:
+        var var_field0 = sse_decode_i_32(deserializer);
+        return ReaderCommand_AdjustWpm(var_field0);
+      case 6:
+        var var_field0 = sse_decode_u_16(deserializer);
+        return ReaderCommand_SetWpm(var_field0);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  ReaderState sse_decode_reader_state(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_currentWord = sse_decode_String(deserializer);
+    var var_currentIndex = sse_decode_usize(deserializer);
+    var var_totalWords = sse_decode_usize(deserializer);
+    var var_wpm = sse_decode_u_16(deserializer);
+    var var_isPlaying = sse_decode_bool(deserializer);
+    var var_atEnd = sse_decode_bool(deserializer);
+    var var_progressPercent = sse_decode_u_8(deserializer);
+    return ReaderState(
+      currentWord: var_currentWord,
+      currentIndex: var_currentIndex,
+      totalWords: var_totalWords,
+      wpm: var_wpm,
+      isPlaying: var_isPlaying,
+      atEnd: var_atEnd,
+      progressPercent: var_progressPercent,
+    );
+  }
+
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint16();
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
@@ -270,24 +1025,48 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
+  BigInt sse_decode_usize(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8() != 0;
-  }
-
-  @protected
-  void sse_encode_AnyhowException(
-    AnyhowException self,
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    ReaderHandle self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.message, serializer);
+    sse_encode_usize(
+      (self as ReaderHandleImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    ReaderHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as ReaderHandleImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerReaderHandle(
+    ReaderHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as ReaderHandleImpl).frbInternalSseEncode(move: null),
+      serializer,
+    );
   }
 
   @protected
@@ -297,9 +1076,72 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_f_32(double self, SseSerializer serializer) {
+  void sse_encode_book_info(BookInfo self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putFloat32(self);
+    sse_encode_String(self.path, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.author, serializer);
+    sse_encode_u_64(self.sizeBytes, serializer);
+    sse_encode_String(self.fileType, serializer);
+    sse_encode_String(self.category, serializer);
+    sse_encode_opt_box_autoadd_u_8(self.progressPercent, serializer);
+  }
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_pacing_config(
+    PacingConfig self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_pacing_config(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_progress_entry(
+    ProgressEntry self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_progress_entry(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_reader_command(
+    ReaderCommand self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_reader_command(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_u_8(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_8(self, serializer);
+  }
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
+  }
+
+  @protected
+  void sse_encode_list_book_info(
+    List<BookInfo> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_book_info(item, serializer);
+    }
   }
 
   @protected
@@ -313,24 +1155,104 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_rsvp_word(
-    List<RsvpWord> self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_opt_String(String? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_rsvp_word(item, serializer);
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_String(self, serializer);
     }
   }
 
   @protected
-  void sse_encode_rsvp_word(RsvpWord self, SseSerializer serializer) {
+  void sse_encode_opt_box_autoadd_progress_entry(
+    ProgressEntry? self,
+    SseSerializer serializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.left, serializer);
-    sse_encode_String(self.center, serializer);
-    sse_encode_String(self.right, serializer);
-    sse_encode_f_32(self.delayFactor, serializer);
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_progress_entry(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_8(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_8(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_pacing_config(PacingConfig self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_16(self.longWordDelayMs, serializer);
+    sse_encode_u_16(self.complexWordDelayMs, serializer);
+    sse_encode_u_16(self.punctuationDelayMs, serializer);
+    sse_encode_u_8(self.longWordScalePercent, serializer);
+    sse_encode_u_8(self.complexWordScalePercent, serializer);
+    sse_encode_u_8(self.punctuationScalePercent, serializer);
+  }
+
+  @protected
+  void sse_encode_progress_entry(ProgressEntry self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(self.wordIndex, serializer);
+    sse_encode_usize(self.wordCount, serializer);
+    sse_encode_u_64(self.updatedAt, serializer);
+  }
+
+  @protected
+  void sse_encode_reader_command(ReaderCommand self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case ReaderCommand_Play():
+        sse_encode_i_32(0, serializer);
+      case ReaderCommand_Pause():
+        sse_encode_i_32(1, serializer);
+      case ReaderCommand_SeekTo(field0: final field0):
+        sse_encode_i_32(2, serializer);
+        sse_encode_usize(field0, serializer);
+      case ReaderCommand_Scrub(field0: final field0):
+        sse_encode_i_32(3, serializer);
+        sse_encode_i_32(field0, serializer);
+      case ReaderCommand_RewindSentence():
+        sse_encode_i_32(4, serializer);
+      case ReaderCommand_AdjustWpm(field0: final field0):
+        sse_encode_i_32(5, serializer);
+        sse_encode_i_32(field0, serializer);
+      case ReaderCommand_SetWpm(field0: final field0):
+        sse_encode_i_32(6, serializer);
+        sse_encode_u_16(field0, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_reader_state(ReaderState self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.currentWord, serializer);
+    sse_encode_usize(self.currentIndex, serializer);
+    sse_encode_usize(self.totalWords, serializer);
+    sse_encode_u_16(self.wpm, serializer);
+    sse_encode_bool(self.isPlaying, serializer);
+    sse_encode_bool(self.atEnd, serializer);
+    sse_encode_u_8(self.progressPercent, serializer);
+  }
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint16(self);
+  }
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
   }
 
   @protected
@@ -345,14 +1267,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
+  void sse_encode_usize(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
+    serializer.buffer.putBigUint64(self);
   }
+}
 
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self ? 1 : 0);
-  }
+@sealed
+class ReaderHandleImpl extends RustOpaque implements ReaderHandle {
+  // Not to be used by end users
+  ReaderHandleImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  ReaderHandleImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
+    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_ReaderHandle,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_ReaderHandle,
+    rustArcDecrementStrongCountPtr:
+        RustLib.instance.api.rust_arc_decrement_strong_count_ReaderHandlePtr,
+  );
 }
