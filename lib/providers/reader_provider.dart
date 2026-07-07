@@ -1,7 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:verse/src/rust/api/reader.dart';
+import 'package:verse/src/rust/core/pacing.dart';
 import 'package:verse/src/rust/api/library.dart' as lib;
+
+class BookChapter {
+  final int wordIndex;
+  final String title;
+  const BookChapter(this.wordIndex, this.title);
+}
 
 class ReaderProvider extends ChangeNotifier {
   ReaderHandle? _handle;
@@ -16,12 +24,112 @@ class ReaderProvider extends ChangeNotifier {
   );
   Timer? _timer;
   String? _currentBookPath;
+  List<String> _words = [];
+  List<BookChapter> _chapters = [];
 
   ReaderState get state => _state;
   bool get isPlaying => _state.isPlaying;
+  List<String> get words => _words;
+  List<BookChapter> get chapters => _chapters;
+
+  String get currentChapterTitle {
+    if (_chapters.isEmpty) return 'Chapter 1';
+    final idx = _state.currentIndex.toInt();
+    String title = _chapters[0].title;
+    for (final chap in _chapters) {
+      if (idx >= chap.wordIndex) {
+        title = chap.title;
+      } else {
+        break;
+      }
+    }
+    return title;
+  }
+
+  void nextChapter() {
+    if (_chapters.isEmpty) return;
+    final idx = _state.currentIndex.toInt();
+    for (final chap in _chapters) {
+      if (chap.wordIndex > idx) {
+        seekTo(chap.wordIndex);
+        return;
+      }
+    }
+  }
+
+  void prevChapter() {
+    if (_chapters.isEmpty) return;
+    final idx = _state.currentIndex.toInt();
+    int currentChapIdx = 0;
+    for (int i = 0; i < _chapters.length; i++) {
+      if (idx >= _chapters[i].wordIndex) {
+        currentChapIdx = i;
+      } else {
+        break;
+      }
+    }
+    if (currentChapIdx > 0) {
+      seekTo(_chapters[currentChapIdx - 1].wordIndex);
+    } else {
+      seekTo(0);
+    }
+  }
+
+  Future<void> _loadWords(String? bookPath) async {
+    _chapters = [];
+    if (bookPath == null) {
+      _words = [
+        "Welcome", "to", "RSVP", "reader!", "This", "is", "a", "demo.",
+        "Swipe", "up", "/", "down", "to", "change", "speed."
+      ];
+      _chapters = [const BookChapter(0, "Welcome")];
+      return;
+    }
+    try {
+      final file = File(bookPath);
+      if (!await file.exists()) {
+        _words = [];
+        return;
+      }
+      final lines = await file.readAsLines();
+      final List<String> parsedWords = [];
+      final List<BookChapter> parsedChapters = [];
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+        if (trimmed.startsWith('@')) {
+          if (trimmed.startsWith('@chapter')) {
+            final title = trimmed.substring(8).trim();
+            parsedChapters.add(BookChapter(parsedWords.length, title));
+          }
+          continue;
+        }
+        final tokens = trimmed.split(RegExp(r'\s+'));
+        for (final token in tokens) {
+          final t = token.trim();
+          if (t.isEmpty) continue;
+          final hasAlphanumeric = t.contains(RegExp(r'[a-zA-Z0-9]'));
+          if (!hasAlphanumeric && t != "..." && t != "-") {
+            continue;
+          }
+          parsedWords.add(t);
+        }
+      }
+      _words = parsedWords;
+      _chapters = parsedChapters;
+      if (_chapters.isEmpty) {
+        _chapters = [const BookChapter(0, "Chapter 1")];
+      }
+    } catch (e) {
+      debugPrint("Error parsing RSVP file: $e");
+      _words = [];
+      _chapters = [const BookChapter(0, "Chapter 1")];
+    }
+  }
 
   Future<void> loadBook(String? bookPath) async {
     _currentBookPath = bookPath;
+    await _loadWords(bookPath);
     _handle = await createReader(bookPath: bookPath);
     _startTimer();
     await _updateState();
@@ -154,6 +262,12 @@ class ReaderProvider extends ChangeNotifier {
         wordIndex: _state.currentIndex,
         wordCount: _state.totalWords,
       );
+    }
+  }
+
+  Future<void> setPacing(PacingConfig config) async {
+    if (_handle != null) {
+      await setPacingConfig(handle: _handle!, config: config);
     }
   }
 
