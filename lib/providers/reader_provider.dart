@@ -75,6 +75,115 @@ class ReaderProvider extends ChangeNotifier {
     }
   }
 
+  List<String> _tokenizeLine(String line) {
+    final List<String> tokens = [];
+    String current = '';
+    final chars = line.split('');
+    int i = 0;
+
+    bool isInlineHyphen(int idx) {
+      if (idx == 0 || idx + 1 >= chars.length) return false;
+      final prev = chars[idx - 1];
+      final next = chars[idx + 1];
+      final reg = RegExp(r'[a-zA-Z0-9]');
+      return reg.hasMatch(prev) && reg.hasMatch(next);
+    }
+
+    bool isSpecialPunctuation(String c) {
+      return const {
+        '.', ',', ';', ':', '!', '?', '"', '(', ')', '[', ']', '{', '}',
+        '/', '\\', '|', '@', '#', '\$', '%', '^', '&', '*', '+', '=', '<', '>'
+      }.contains(c);
+    }
+
+    void flushCurrent() {
+      if (current.isEmpty) return;
+      final trimmed = current.trim();
+      if (trimmed.isEmpty) {
+        current = '';
+        return;
+      }
+      
+      if (trimmed.split('').every((ch) => ch == '.') && trimmed.length >= 3) {
+        tokens.add('...');
+        current = '';
+        return;
+      }
+      if (trimmed.split('').every((ch) => ch == '-')) {
+        tokens.add('-');
+        current = '';
+        return;
+      }
+
+      tokens.add(trimmed);
+      current = '';
+    }
+
+    while (i < chars.length) {
+      final c = chars[i];
+
+      // 1. Ellipsis
+      if (c == '.' && i + 2 < chars.length && chars[i + 1] == '.' && chars[i + 2] == '.') {
+        int dotCount = 0;
+        while (i < chars.length && chars[i] == '.') {
+          dotCount++;
+          i++;
+        }
+        if (dotCount >= 3) {
+          if (current.isNotEmpty) {
+            current += '...';
+            flushCurrent();
+          } else {
+            tokens.add('...');
+          }
+        }
+        continue;
+      }
+
+      // 2. Hyphen
+      if (c == '-') {
+        if (isInlineHyphen(i)) {
+          current += c;
+          i++;
+          continue;
+        }
+        flushCurrent();
+        while (i < chars.length && chars[i] == '-') {
+          i++;
+        }
+        tokens.add('-');
+        continue;
+      }
+
+      // 3. Whitespace
+      if (RegExp(r'\s').hasMatch(c)) {
+        flushCurrent();
+        i++;
+        continue;
+      }
+
+      // 4. Special Punctuation
+      if (isSpecialPunctuation(c)) {
+        if (current.isNotEmpty && const {'.', ',', '!', '?', ';', ':'}.contains(c)) {
+          current += c;
+          i++;
+          continue;
+        } else {
+          flushCurrent();
+          i++;
+          continue;
+        }
+      }
+
+      // 5. Regular char
+      current += c;
+      i++;
+    }
+
+    flushCurrent();
+    return tokens;
+  }
+
   Future<void> _loadWords(String? bookPath) async {
     _chapters = [];
     if (bookPath == null) {
@@ -104,10 +213,8 @@ class ReaderProvider extends ChangeNotifier {
           }
           continue;
         }
-        final tokens = trimmed.split(RegExp(r'\s+'));
-        for (final token in tokens) {
-          final t = token.trim();
-          if (t.isEmpty) continue;
+        final tokens = _tokenizeLine(trimmed);
+        for (final t in tokens) {
           final hasAlphanumeric = t.contains(RegExp(r'[a-zA-Z0-9]'));
           if (!hasAlphanumeric && t != "..." && t != "-") {
             continue;

@@ -145,10 +145,11 @@ fn process_text_line(
 
     if *paragraph_pending {
         // Start a new paragraph
-        if !content.words.is_empty()
-            && content.paragraph_starts.last() != Some(&content.words.len())
-        {
-            content.paragraph_starts.push(content.words.len());
+        let word_len = content.words.len();
+        if content.paragraph_starts.is_empty() {
+            content.paragraph_starts.push(0);
+        } else if content.paragraph_starts.last() != Some(&word_len) {
+            content.paragraph_starts.push(word_len);
         }
         *paragraph_pending = false;
         *in_paragraph = true;

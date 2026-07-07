@@ -21,115 +21,112 @@ pub fn tokenize_line(line: &str) -> Vec<Token> {
     let line = normalize_display_text(line);
     let mut tokens = Vec::new();
     let mut current = String::new();
-    let mut pending_hyphen = false;
     let chars: Vec<char> = line.chars().collect();
     let mut i = 0;
 
     while i < chars.len() {
         let c = chars[i];
 
-        // Word boundary (space or punctuation that separates words)
-        if is_word_boundary(c) {
-            flush_current(&mut current, &mut pending_hyphen, &mut tokens);
-            i += 1;
-            continue;
-        }
-
-        // Handle hyphens: inline vs standalone
-        if c == '-' {
-            // Check if this hyphen is inside a word (inline)
-            if is_inline_hyphen(&chars, i) {
-                current.push(c);
-                i += 1;
-                continue;
-            }
-
-            // Standalone hyphen (or series of hyphens)
-            flush_current(&mut current, &mut pending_hyphen, &mut tokens);
-            let mut hyphen_count = 0;
-            while i < chars.len() && chars[i] == '-' {
-                hyphen_count += 1;
-                i += 1;
-            }
-            // Emit a single "-" token if any hyphens were found
-            if hyphen_count > 0 {
-                // Check if we already have a pending hyphen token from a previous dash?
-                // For simplicity, emit one token per run.
-                // But rsvpnano would emit just "-". We'll follow that.
-                push_token("-", &mut tokens);
-            }
-            continue;
-        }
-
-        // Handle ellipsis: three or more dots in a row
+        // 1. Handle ellipsis: three or more dots in a row
         if c == '.' && i + 2 < chars.len() && chars[i + 1] == '.' && chars[i + 2] == '.' {
-            flush_current(&mut current, &mut pending_hyphen, &mut tokens);
             let mut dot_count = 0;
             while i < chars.len() && chars[i] == '.' {
                 dot_count += 1;
                 i += 1;
             }
             if dot_count >= 3 {
-                push_token("...", &mut tokens);
-                // Skip any extra dots? They're already consumed.
-            } else {
-                // Less than three dots: treat as punctuation? But ellipsis is only for 3+.
-                // For completeness, we could push a single '.' token per dot, but that's rare.
-                // We'll just ignore them; they'll be picked up as word boundary later.
+                if !current.is_empty() {
+                    current.push_str("...");
+                    flush_current(&mut current, &mut tokens);
+                } else {
+                    push_token("...", &mut tokens);
+                }
             }
             continue;
         }
 
-        // Regular character: accumulate into current token
+        // 2. Handle hyphens: inline vs standalone
+        if c == '-' {
+            if is_inline_hyphen(&chars, i) {
+                current.push(c);
+                i += 1;
+                continue;
+            }
+
+            // Standalone hyphen or sequence of hyphens
+            flush_current(&mut current, &mut tokens);
+            while i < chars.len() && chars[i] == '-' {
+                i += 1;
+            }
+            push_token("-", &mut tokens);
+            continue;
+        }
+
+        // 3. Handle whitespace: word boundary
+        if c.is_whitespace() {
+            flush_current(&mut current, &mut tokens);
+            i += 1;
+            continue;
+        }
+
+        // 4. Handle special punctuation boundaries
+        if is_special_punctuation(c) {
+            // Trailing punctuation attached to the end of a word is preserved (e.g., "Hello.")
+            if !current.is_empty() && (c == '.' || c == ',' || c == '!' || c == '?' || c == ';' || c == ':') {
+                current.push(c);
+                i += 1;
+                continue;
+            } else {
+                flush_current(&mut current, &mut tokens);
+                i += 1;
+                continue;
+            }
+        }
+
+        // 5. Regular character: accumulate into current token
         current.push(c);
         i += 1;
     }
 
-    flush_current(&mut current, &mut pending_hyphen, &mut tokens);
+    flush_current(&mut current, &mut tokens);
     tokens
 }
 
-/// Returns true if the character is a word boundary (i.e., should separate tokens).
-/// This includes whitespace and punctuation except hyphens and apostrophes inside words.
-fn is_word_boundary(c: char) -> bool {
-    c.is_whitespace()
-        || matches!(
-            c,
-            '.' | ','
-                | ';'
-                | ':'
-                | '!'
-                | '?'
-                | '"'
-                | '\''
-                | '('
-                | ')'
-                | '['
-                | ']'
-                | '{'
-                | '}'
-                | '/'
-                | '\\'
-                | '_'
-                | '|'
-                | '@'
-                | '#'
-                | '$'
-                | '%'
-                | '^'
-                | '&'
-                | '*'
-                | '+'
-                | '='
-                | '<'
-                | '>'
-        )
+/// Returns true if the character is a special punctuation boundary.
+fn is_special_punctuation(c: char) -> bool {
+    matches!(
+        c,
+        '.' | ','
+            | ';'
+            | ':'
+            | '!'
+            | '?'
+            | '"'
+            | '('
+            | ')'
+            | '['
+            | ']'
+            | '{'
+            | '}'
+            | '/'
+            | '\\'
+            | '|'
+            | '@'
+            | '#'
+            | '$'
+            | '%'
+            | '^'
+            | '&'
+            | '*'
+            | '+'
+            | '='
+            | '<'
+            | '>'
+    )
 }
 
 /// Determines if a hyphen at position `i` in the character slice is part of a word
 /// (inline hyphen) or a standalone separator.
-/// Example: "well-known" -> hyphen between 'l' and 'k' -> inline -> true.
-/// Example: "- " -> standalone -> false.
 fn is_inline_hyphen(chars: &[char], i: usize) -> bool {
     if chars[i] != '-' {
         return false;
@@ -144,14 +141,12 @@ fn is_inline_hyphen(chars: &[char], i: usize) -> bool {
     is_word_char(prev) && is_word_char(next)
 }
 
-/// Flushes the accumulated `current` token, handling ellipsis and hyphen tokens correctly.
-/// The `pending_hyphen` flag is not used in this simplified version (we emit standalone hyphens immediately).
-fn flush_current(current: &mut String, _pending_hyphen: &mut bool, tokens: &mut Vec<Token>) {
+/// Flushes the accumulated `current` token.
+fn flush_current(current: &mut String, tokens: &mut Vec<Token>) {
     if current.is_empty() {
         return;
     }
 
-    // Clean up: trim (though shouldn't be needed)
     let trimmed = current.trim();
     if trimmed.is_empty() {
         current.clear();
@@ -172,7 +167,6 @@ fn flush_current(current: &mut String, _pending_hyphen: &mut bool, tokens: &mut 
         return;
     }
 
-    // Normal token: push as is
     push_token(trimmed, tokens);
     current.clear();
 }

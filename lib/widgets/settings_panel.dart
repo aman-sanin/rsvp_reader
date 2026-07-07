@@ -275,7 +275,9 @@ class _SettingsPanelState extends State<SettingsPanel> {
                   // ORP Color Select
                   Text('ORP Color', style: labelStyle),
                   const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: ['red', 'green', 'amber', 'blue'].map((colorName) {
                       final isSelected = settings.orpColor == colorName;
                       final Color chipColor;
@@ -295,19 +297,16 @@ class _SettingsPanelState extends State<SettingsPanel> {
                           break;
                       }
 
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: ChoiceChip(
-                          avatar: CircleAvatar(
-                            backgroundColor: chipColor,
-                            radius: 6,
-                          ),
-                          label: Text(
-                            colorName[0].toUpperCase() + colorName.substring(1),
-                          ),
-                          selected: isSelected,
-                          onSelected: (_) => settings.setOrpColor(colorName),
+                      return ChoiceChip(
+                        avatar: CircleAvatar(
+                          backgroundColor: chipColor,
+                          radius: 6,
                         ),
+                        label: Text(
+                          colorName[0].toUpperCase() + colorName.substring(1),
+                        ),
+                        selected: isSelected,
+                        onSelected: (_) => settings.setOrpColor(colorName),
                       );
                     }).toList(),
                   ),
