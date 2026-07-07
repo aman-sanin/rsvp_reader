@@ -71,16 +71,25 @@ pub fn tokenize_line(line: &str) -> Vec<Token> {
 
         // 4. Handle special punctuation boundaries
         if is_special_punctuation(c) {
-            // Trailing punctuation attached to the end of a word is preserved (e.g., "Hello.")
-            if !current.is_empty() && (c == '.' || c == ',' || c == '!' || c == '?' || c == ';' || c == ':') {
-                current.push(c);
-                i += 1;
-                continue;
-            } else {
-                flush_current(&mut current, &mut tokens);
-                i += 1;
-                continue;
+            if !current.is_empty() {
+                if c == '.' || c == ',' || c == '!' || c == '?' || c == ';' || c == ':' {
+                    current.push(c);
+                    i += 1;
+                    continue;
+                } else {
+                    flush_current(&mut current, &mut tokens);
+                }
             }
+
+            // Standalone punctuation/symbol (group consecutive identical characters, e.g. "!!!")
+            let mut symbol = String::new();
+            let start_char = c;
+            while i < chars.len() && chars[i] == start_char {
+                symbol.push(chars[i]);
+                i += 1;
+            }
+            push_token(&symbol, &mut tokens);
+            continue;
         }
 
         // 5. Regular character: accumulate into current token
@@ -171,23 +180,15 @@ fn flush_current(current: &mut String, tokens: &mut Vec<Token>) {
     current.clear();
 }
 
-/// Adds a token to the list only if it has at least one readable character (letter/digit)
-/// or it's a standalone rhythm token (like "-").
+/// Adds a token to the list.
 fn push_token(text: &str, tokens: &mut Vec<Token>) {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return;
     }
-
-    // Check if token has any alphanumeric character
-    let has_readable = trimmed.chars().any(|c| c.is_alphanumeric());
-    // Check if it's a standalone hyphen or ellipsis
-    let is_rhythm = trimmed == "-" || trimmed == "...";
-    if has_readable || is_rhythm {
-        tokens.push(Token {
-            text: trimmed.to_string(),
-        });
-    }
+    tokens.push(Token {
+        text: trimmed.to_string(),
+    });
 }
 
 #[cfg(test)]
@@ -238,9 +239,9 @@ mod tests {
 
     #[test]
     fn test_skipping_rhythm_only() {
-        // Tokens with only punctuation but not hyphen or ellipsis are skipped.
-        assert_eq!(text("!!!"), Vec::<String>::new());
-        assert_eq!(text("???"), Vec::<String>::new());
+        // We do NOT skip punctuation tokens anymore to ensure coherent reading.
+        assert_eq!(text("!!!"), vec!["!!!"]);
+        assert_eq!(text("???"), vec!["???"]);
         assert_eq!(text("..."), vec!["..."]);
         assert_eq!(text("---"), vec!["-"]);
     }

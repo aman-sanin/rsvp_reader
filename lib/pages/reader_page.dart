@@ -549,7 +549,7 @@ class _ReaderPageState extends State<ReaderPage> {
                                             color: theme.colorScheme.onSurfaceVariant,
                                             onPressed: () {
                                               _resetAutoHideTimer();
-                                              _provider.rewindSentence();
+                                              _provider.goToParagraphStart();
                                             },
                                           ),
                                           const SizedBox(width: 32),

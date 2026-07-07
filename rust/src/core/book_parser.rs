@@ -181,13 +181,6 @@ fn flush_line_buffer(
 
     let tokens = tokenize_line(line_buffer);
     for token in tokens {
-        // Skip tokens that are only punctuation and not a sentence‑ending ellipsis or dash
-        if token.text.chars().all(|c| !c.is_alphanumeric())
-            && token.text != "..."
-            && token.text != "-"
-        {
-            continue;
-        }
         content.words.push(token.text);
     }
 

@@ -47,6 +47,7 @@ pub fn is_vowel(c: char) -> bool {
 /// - Replaces common Unicode punctuation with ASCII equivalents
 /// - Removes zero‑width spaces and other invisible characters
 pub fn normalize_display_text(text: &str) -> String {
+    let text = text.trim();
     let mut result = String::with_capacity(text.len());
     let mut last_was_space = false;
     let mut chars = text.chars().peekable();
@@ -96,7 +97,7 @@ pub fn is_abbreviation(word: &str, next_word_starts_lowercase: bool) -> bool {
 
     // Known common abbreviations (could be extended)
     let known = [
-        "mr.", "mrs.", "ms.", "dr.", "prof.", "sr.", "jr.", "st.", "vs.", "etc.",
+        "mr.", "mrs.", "ms.", "prof.", "sr.", "jr.", "st.", "vs.", "etc.",
         "e.g.", "i.e.", "cf.", "no.", "fig.", "eq.", "inc.", "ltd.", "co.", "dept.",
         "mt.", "ft.",
     ];

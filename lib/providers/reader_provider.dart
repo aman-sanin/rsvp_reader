@@ -26,11 +26,13 @@ class ReaderProvider extends ChangeNotifier {
   String? _currentBookPath;
   List<String> _words = [];
   List<BookChapter> _chapters = [];
+  List<int> _paragraphStarts = [];
 
   ReaderState get state => _state;
   bool get isPlaying => _state.isPlaying;
   List<String> get words => _words;
   List<BookChapter> get chapters => _chapters;
+  List<int> get paragraphStarts => _paragraphStarts;
 
   String get currentChapterTitle {
     if (_chapters.isEmpty) return 'Chapter 1';
@@ -72,6 +74,25 @@ class ReaderProvider extends ChangeNotifier {
       seekTo(_chapters[currentChapIdx - 1].wordIndex);
     } else {
       seekTo(0);
+    }
+  }
+
+  void goToParagraphStart() {
+    if (_paragraphStarts.isEmpty) return;
+    final idx = _state.currentIndex.toInt();
+    int currentParaIdx = 0;
+    for (int i = 0; i < _paragraphStarts.length; i++) {
+      if (idx >= _paragraphStarts[i]) {
+        currentParaIdx = i;
+      } else {
+        break;
+      }
+    }
+    final startOfCurrent = _paragraphStarts[currentParaIdx];
+    if (idx - startOfCurrent <= 3 && currentParaIdx > 0) {
+      seekTo(_paragraphStarts[currentParaIdx - 1]);
+    } else {
+      seekTo(startOfCurrent);
     }
   }
 
@@ -164,15 +185,25 @@ class ReaderProvider extends ChangeNotifier {
 
       // 4. Special Punctuation
       if (isSpecialPunctuation(c)) {
-        if (current.isNotEmpty && const {'.', ',', '!', '?', ';', ':'}.contains(c)) {
-          current += c;
-          i++;
-          continue;
-        } else {
-          flushCurrent();
-          i++;
-          continue;
+        if (current.isNotEmpty) {
+          if (const {'.', ',', '!', '?', ';', ':'}.contains(c)) {
+            current += c;
+            i++;
+            continue;
+          } else {
+            flushCurrent();
+          }
         }
+
+        // Standalone punctuation/symbol (group consecutive identical characters)
+        String symbol = '';
+        final startChar = c;
+        while (i < chars.length && chars[i] == startChar) {
+          symbol += chars[i];
+          i++;
+        }
+        tokens.add(symbol);
+        continue;
       }
 
       // 5. Regular char
@@ -186,12 +217,14 @@ class ReaderProvider extends ChangeNotifier {
 
   Future<void> _loadWords(String? bookPath) async {
     _chapters = [];
+    _paragraphStarts = [];
     if (bookPath == null) {
       _words = [
         "Welcome", "to", "RSVP", "reader!", "This", "is", "a", "demo.",
         "Swipe", "up", "/", "down", "to", "change", "speed."
       ];
       _chapters = [const BookChapter(0, "Welcome")];
+      _paragraphStarts = [0];
       return;
     }
     try {
@@ -203,34 +236,66 @@ class ReaderProvider extends ChangeNotifier {
       final lines = await file.readAsLines();
       final List<String> parsedWords = [];
       final List<BookChapter> parsedChapters = [];
+      final List<int> parsedParagraphs = [];
+      
+      bool paragraphPending = true;
+
+      void checkParagraphPending() {
+        if (paragraphPending) {
+          final idx = parsedWords.length;
+          if (parsedParagraphs.isEmpty) {
+            parsedParagraphs.add(0);
+          } else if (parsedParagraphs.last != idx) {
+            parsedParagraphs.add(idx);
+          }
+          paragraphPending = false;
+        }
+      }
+
       for (final line in lines) {
         final trimmed = line.trim();
-        if (trimmed.isEmpty) continue;
+        if (trimmed.isEmpty) {
+          paragraphPending = true;
+          continue;
+        }
         if (trimmed.startsWith('@')) {
           if (trimmed.startsWith('@chapter')) {
             final title = trimmed.substring(8).trim();
             parsedChapters.add(BookChapter(parsedWords.length, title));
+            paragraphPending = true;
+          } else if (trimmed.startsWith('@para')) {
+            paragraphPending = true;
+          } else if (trimmed.startsWith('@@')) {
+            paragraphPending = true;
+            final rest = trimmed.substring(1);
+            final tokens = _tokenizeLine(rest);
+            if (tokens.isNotEmpty) {
+              checkParagraphPending();
+              parsedWords.addAll(tokens);
+            }
           }
           continue;
         }
         final tokens = _tokenizeLine(trimmed);
-        for (final t in tokens) {
-          final hasAlphanumeric = t.contains(RegExp(r'[a-zA-Z0-9]'));
-          if (!hasAlphanumeric && t != "..." && t != "-") {
-            continue;
-          }
-          parsedWords.add(t);
+        if (tokens.isNotEmpty) {
+          checkParagraphPending();
+          parsedWords.addAll(tokens);
         }
       }
       _words = parsedWords;
       _chapters = parsedChapters;
+      _paragraphStarts = parsedParagraphs;
       if (_chapters.isEmpty) {
         _chapters = [const BookChapter(0, "Chapter 1")];
+      }
+      if (_paragraphStarts.isEmpty) {
+        _paragraphStarts = [0];
       }
     } catch (e) {
       debugPrint("Error parsing RSVP file: $e");
       _words = [];
       _chapters = [const BookChapter(0, "Chapter 1")];
+      _paragraphStarts = [0];
     }
   }
 
