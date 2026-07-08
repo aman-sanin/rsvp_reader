@@ -26,8 +26,10 @@ impl BookCache {
     pub fn load(path: &Path) -> io::Result<Self> {
         match fs::read_to_string(path) {
             Ok(data) => {
-                let map = serde_json::from_str(&data)?;
-                Ok(BookCache { map })
+                match serde_json::from_str::<BookCache>(&data) {
+                    Ok(cache) => Ok(cache),
+                    Err(_) => Ok(BookCache::default()),
+                }
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(BookCache::default()),
             Err(e) => Err(e),

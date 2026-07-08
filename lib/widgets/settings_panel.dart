@@ -1,70 +1,23 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:verse/providers/settings_store.dart';
 
 class SettingsPanel extends StatefulWidget {
-  final Function(String path)? onPastedTextChanged;
-
-  const SettingsPanel({Key? key, this.onPastedTextChanged})
-      : super(key: key);
+  const SettingsPanel({Key? key}) : super(key: key);
 
   @override
   State<SettingsPanel> createState() => _SettingsPanelState();
 }
 
 class _SettingsPanelState extends State<SettingsPanel> {
-  late TextEditingController _textController;
-
   @override
   void initState() {
     super.initState();
-    final settings = Provider.of<SettingsStore>(context, listen: false);
-    _textController = TextEditingController(text: settings.pastedText);
   }
 
   @override
   void dispose() {
-    _textController.dispose();
     super.dispose();
-  }
-
-  Future<void> _updatePastedTextFile(SettingsStore settings, String val) async {
-    settings.setPastedText(val);
-
-    // Get correct writable directory
-    String cacheDir;
-    if (Platform.isAndroid || Platform.isIOS) {
-      final dir = await getApplicationSupportDirectory();
-      cacheDir = dir.path;
-    } else {
-      cacheDir = Platform.environment['HOME'] ?? '.';
-    }
-    final rsvpPath = '$cacheDir/.rsvp_pasted.rsvp';
-    final file = File(rsvpPath);
-
-    final buffer = StringBuffer();
-    buffer.writeln('@rsvp 1');
-    buffer.writeln('@title Pasted Text');
-    buffer.writeln('@author Guest');
-    buffer.writeln();
-
-    final lines = val.split('\n');
-    for (final line in lines) {
-      final trimmedLine = line.trim();
-      if (trimmedLine.isEmpty) {
-        buffer.writeln('@para');
-      } else {
-        buffer.writeln(trimmedLine);
-      }
-    }
-
-    await file.writeAsString(buffer.toString());
-
-    if (widget.onPastedTextChanged != null) {
-      widget.onPastedTextChanged!(rsvpPath);
-    }
   }
 
   @override
@@ -441,39 +394,6 @@ class _SettingsPanelState extends State<SettingsPanel> {
                   ),
                   const Divider(height: 32),
 
-                  // --- TEXT INPUT ---
-                  Text('TEXT INPUT', style: sectionTitleStyle),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _textController,
-                    maxLines: 6,
-                    minLines: 3,
-                    onChanged: (val) => _updatePastedTextFile(settings, val),
-                    style: getGoogleFontStyle(
-                      settings.fontPair.uiFontFamily,
-                      textStyle: const TextStyle(fontSize: 14),
-                    ),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: theme.colorScheme.surfaceContainerLow,
-                      hintText: 'Paste or type text here to begin reading...',
-                      hintStyle: const TextStyle(color: Colors.grey),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.outlineVariant,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
                   // --- RESET TO DEFAULTS ---
                   SizedBox(
                     width: double.infinity,
@@ -481,7 +401,6 @@ class _SettingsPanelState extends State<SettingsPanel> {
                     child: OutlinedButton.icon(
                       onPressed: () {
                         settings.resetToDefaults();
-                        _textController.text = settings.pastedText;
                       },
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(color: theme.colorScheme.outlineVariant),

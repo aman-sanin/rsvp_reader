@@ -22,8 +22,10 @@ impl ProgressStore {
     pub fn load(path: &Path) -> io::Result<Self> {
         match fs::read_to_string(path) {
             Ok(data) => {
-                let map = serde_json::from_str(&data)?;
-                Ok(ProgressStore { map })
+                match serde_json::from_str::<ProgressStore>(&data) {
+                    Ok(store) => Ok(store),
+                    Err(_) => Ok(ProgressStore::default()),
+                }
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(ProgressStore::default()),
             Err(e) => Err(e),

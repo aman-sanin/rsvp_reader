@@ -27,6 +27,8 @@ class ReaderProvider extends ChangeNotifier {
   List<String> _words = [];
   List<BookChapter> _chapters = [];
   List<int> _paragraphStarts = [];
+  int _lastSavedIndex = -1;
+  int _lastSavedTimeMs = 0;
 
   ReaderState get state => _state;
   bool get isPlaying => _state.isPlaying;
@@ -301,8 +303,27 @@ class ReaderProvider extends ChangeNotifier {
 
   Future<void> loadBook(String? bookPath) async {
     _currentBookPath = bookPath;
+    _lastSavedIndex = -1;
+    _lastSavedTimeMs = 0;
     await _loadWords(bookPath);
     _handle = await createReader(bookPath: bookPath);
+    
+    // Load saved progress index if available
+    if (bookPath != null && !bookPath.endsWith('.rsvp_pasted.rsvp')) {
+      try {
+        final progress = await lib.getProgress(bookPath: bookPath);
+        if (progress != null && progress.wordIndex > BigInt.zero) {
+          await readerCommand(
+            handle: _handle!,
+            cmd: ReaderCommand.seekTo(BigInt.from(progress.wordIndex.toInt())),
+            nowMs: BigInt.from(DateTime.now().millisecondsSinceEpoch),
+          );
+        }
+      } catch (e) {
+        debugPrint("Failed to load saved progress: $e");
+      }
+    }
+
     _startTimer();
     await _updateState();
     await readerCommand(
@@ -327,6 +348,21 @@ class ReaderProvider extends ChangeNotifier {
     await _updateState();
   }
 
+  Future<void> _saveProgressIfNeeded() async {
+    if (_handle == null || _currentBookPath == null || _state.totalWords == BigInt.zero) return;
+    final currentIdx = _state.currentIndex.toInt();
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    // Save if it's the first time, or index moved by 20+ words, or 5 seconds have passed
+    if (_lastSavedIndex == -1 ||
+        (currentIdx - _lastSavedIndex).abs() >= 20 ||
+        (now - _lastSavedTimeMs) >= 5000) {
+      _lastSavedIndex = currentIdx;
+      _lastSavedTimeMs = now;
+      await saveProgress();
+    }
+  }
+
   Future<void> _updateState() async {
     if (_handle == null) return;
     final newState = await readerState(handle: _handle!);
@@ -337,6 +373,7 @@ class ReaderProvider extends ChangeNotifier {
         newState.progressPercent != _state.progressPercent) {
       _state = newState;
       notifyListeners();
+      await _saveProgressIfNeeded();
     }
   }
 
@@ -359,6 +396,7 @@ class ReaderProvider extends ChangeNotifier {
         nowMs: BigInt.from(DateTime.now().millisecondsSinceEpoch),
       );
       await _updateState();
+      await saveProgress();
     }
   }
 
@@ -378,6 +416,7 @@ class ReaderProvider extends ChangeNotifier {
         nowMs: BigInt.from(DateTime.now().millisecondsSinceEpoch),
       );
       await _updateState();
+      await saveProgress();
     }
   }
 
@@ -389,6 +428,7 @@ class ReaderProvider extends ChangeNotifier {
         nowMs: BigInt.from(DateTime.now().millisecondsSinceEpoch),
       );
       await _updateState();
+      await saveProgress();
     }
   }
 
@@ -400,6 +440,7 @@ class ReaderProvider extends ChangeNotifier {
         nowMs: BigInt.from(DateTime.now().millisecondsSinceEpoch),
       );
       await _updateState();
+      await saveProgress();
     }
   }
 
@@ -429,6 +470,9 @@ class ReaderProvider extends ChangeNotifier {
     if (_handle != null &&
         _state.totalWords > BigInt.zero &&
         _currentBookPath != null) {
+      if (_currentBookPath!.endsWith('.rsvp_pasted.rsvp')) {
+        return;
+      }
       await lib.saveProgress(
         bookPath: _currentBookPath!,
         wordIndex: _state.currentIndex,

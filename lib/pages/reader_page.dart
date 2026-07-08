@@ -127,14 +127,7 @@ class _ReaderPageState extends State<ReaderPage> {
       builder: (context) {
         return FractionallySizedBox(
           heightFactor: 0.75,
-          child: SettingsPanel(
-            onPastedTextChanged: (rsvpPath) {
-              _provider.loadBook(rsvpPath).then((_) {
-                _provider.setWpm(settings.wpm);
-                _provider.setPacing(settings.pacingConfig);
-              });
-            },
-          ),
+          child: const SettingsPanel(),
         );
       },
     ).then((_) {
@@ -215,7 +208,16 @@ class _ReaderPageState extends State<ReaderPage> {
               : ThemeSystem.getSepiaTheme(),
       child: ChangeNotifierProvider<ReaderProvider>.value(
         value: _provider,
-        child: Scaffold(
+        child: PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, result) async {
+            if (didPop) return;
+            final navigator = Navigator.of(context);
+            await _provider.pause();
+            await _provider.saveProgress();
+            navigator.pop();
+          },
+          child: Scaffold(
           // Drawer sliding from the right for chapters list
           endDrawer: Drawer(
             backgroundColor: theme.colorScheme.surface,
@@ -392,7 +394,6 @@ class _ReaderPageState extends State<ReaderPage> {
                                           color: theme.colorScheme.onSurfaceVariant,
                                         ),
                                         onPressed: () {
-                                          _provider.pause();
                                           Navigator.pop(context);
                                         },
                                       ),
@@ -643,6 +644,7 @@ class _ReaderPageState extends State<ReaderPage> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

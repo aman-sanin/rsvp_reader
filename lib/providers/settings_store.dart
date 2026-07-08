@@ -106,9 +106,7 @@ class SettingsStore extends ChangeNotifier {
   bool _autoHideControls = true;
   String _orpColor = 'red';
 
-  // Last pasted text
-  String _pastedText =
-      "Rapid Serial Visual Presentation (RSVP) is a reading technique where words are displayed sequentially at a single focal point. By eliminating eye movement (saccades), RSVP reduces cognitive load and allows you to read at much higher speeds. You can customize the pacing, fonts, themes, and ORP alignment from the settings panel below.";
+
 
   SettingsStore() {
     _loadPrefs();
@@ -133,7 +131,6 @@ class SettingsStore extends ChangeNotifier {
   int get longWordScalePercent => _longWordScalePercent;
   int get complexWordScalePercent => _complexWordScalePercent;
   bool get autoHideControls => _autoHideControls;
-  String get pastedText => _pastedText;
   String get orpColor => _orpColor;
 
   PacingConfig get pacingConfig => PacingConfig(
@@ -169,7 +166,6 @@ class SettingsStore extends ChangeNotifier {
     _complexWordScalePercent =
         _prefs?.getInt('rsvp_complexWordScalePercent') ?? 100;
     _autoHideControls = _prefs?.getBool('rsvp_autoHideControls') ?? true;
-    _pastedText = _prefs?.getString('rsvp_pastedText') ?? _pastedText;
     _orpColor = _prefs?.getString('rsvp_orpColor') ?? 'red';
     notifyListeners();
   }
@@ -271,11 +267,7 @@ class SettingsStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setPastedText(String val) {
-    _pastedText = val;
-    _prefs?.setString('rsvp_pastedText', val);
-    notifyListeners();
-  }
+
 
   void setOrpColor(String val) {
     _orpColor = val;
