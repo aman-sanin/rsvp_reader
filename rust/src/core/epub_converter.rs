@@ -354,7 +354,7 @@ fn extract_text_from_html<W: Write>(html: &str, rsvp_writer: &mut RsvpWriter<W>)
                 heading.push(c);
             } else {
                 line_buffer.push(c);
-                if line_buffer.len() > 200 {
+                if line_buffer.len() > 200 && (c.is_whitespace() || line_buffer.len() > 1000) {
                     flush_line_buffer(&mut line_buffer, rsvp_writer)?;
                 }
             }
@@ -440,4 +440,26 @@ fn flush_line_buffer<W: Write>(buffer: &mut String, writer: &mut RsvpWriter<W>) 
     }
     buffer.clear();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_text_boundary_no_split() {
+        let mut html = String::new();
+        for _ in 0..199 {
+            html.push(' ');
+        }
+        html.push_str("was");
+
+        let mut output = Vec::new();
+        let mut rsvp_writer = RsvpWriter::new(&mut output, 0);
+        extract_text_from_html(&html, &mut rsvp_writer).unwrap();
+        rsvp_writer.finish().unwrap();
+
+        let result = String::from_utf8(output).unwrap();
+        assert!(result.contains("was"), "Expected 'was' to not be split, but result was:\n{}", result);
+    }
 }
