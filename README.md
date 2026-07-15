@@ -31,7 +31,7 @@ Ensure you have the following installed on your system:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/rsvp_reader.git
+   git clone https://github.com/aman-sanin/rsvp_reader.git
    cd rsvp_reader
    ```
 
